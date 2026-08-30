@@ -34,3 +34,8 @@ dotnet_diagnostic.CA2000.severity = warning
 
 [*.{json,props,targets,csproj,sln,xml}]
 indent_size = 2
+
+# Auto-generated EF Core Migrations — suppress all analyzer rules
+[src/TPoolNet/Migrations/**.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none

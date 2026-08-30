@@ -5,14 +5,22 @@
     <PackageId>TPoolNet</PackageId>
     <Version>0.1.0-alpha</Version>
     <Authors>TPoolNet Contributors</Authors>
-    <Description>High-performance SQL Server query and connection optimization library for Entity Framework Core.</Description>
-    <PackageTags>efcore;sqlserver;performance;pooling</PackageTags>
+    <Description>High-performance SQL Server transient-table pool library for .NET 8 — eliminates tempdb contention via atomic CTE leasing and EF Core.</Description>
+    <PackageTags>efcore;sqlserver;performance;pooling;tpool</PackageTags>
     <RepositoryType>git</RepositoryType>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
 </Project>
