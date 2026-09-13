@@ -82,19 +82,19 @@
 **Goal**: Programmatically provision physical pool tables according to `TablesType` templates, replacing legacy stored procedures `sproc_AddTablesPool` and `sproc_GenerateTableScript`.
 
 **Tasks**:
-- [ ] Create `ITableProvisionerService` public interface in `TPoolNet.Abstractions` with:
+- [x] Create `ITableProvisionerService` public interface in `TPoolNet.Abstractions` with:
   - `ProvisionTablesAsync(tableTypeName, count, ct)`
   - `DropTablesAsync(tableTypeName, count, force, ct)`
   - `EnsurePoolCapacityAsync(tableTypeName, targetCapacity, ct)`
-- [ ] Implement `TableProvisionerService.ProvisionTablesAsync`:
+- [x] Implement `TableProvisionerService.ProvisionTablesAsync`:
   - Fetch `DdlTemplate` from `TablesType` by name.
   - Calculate next sequence index: `tbl_{TablePrefix}_{Sequence:D3}`.
   - Replace placeholders `{SCHEMA}` and `{TABLENAME}` in template.
   - Execute `CREATE TABLE` via `Database.ExecuteSqlRawAsync(...)`.
   - Register new table in `[tpool].[TablesPool]` within a local transaction.
-- [ ] Enforce `MaxPoolSize` guardrails — reject provisioning beyond configured limit.
-- [ ] Implement `DropTablesAsync` — drop unused (not booked) tables, optionally `force` to drop even active ones.
-- [ ] Implement `EnsurePoolCapacityAsync` — provision missing tables up to `targetCapacity` on startup.
+- [x] Enforce `MaxPoolSize` guardrails — reject provisioning beyond configured limit.
+- [x] Implement `DropTablesAsync` — drop unused (not booked) tables, optionally `force` to drop even active ones.
+- [x] Implement `EnsurePoolCapacityAsync` — provision missing tables up to `targetCapacity` on startup.
 
 **Acceptance Criteria**:
 * Calling provisioner dynamically creates physical tables in SQL Server and adds matching entries in `TablesPool`.

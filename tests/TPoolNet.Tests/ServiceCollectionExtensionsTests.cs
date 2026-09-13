@@ -38,6 +38,7 @@ public class ServiceCollectionExtensionsTests
         var serviceDescriptors = services.ToList();
 
         serviceDescriptors.Should().Contain(d => d.ServiceType == typeof(ITablePoolService));
+        serviceDescriptors.Should().Contain(d => d.ServiceType == typeof(ITableProvisionerService));
         serviceDescriptors.Should().Contain(d => d.ServiceType == typeof(TPoolDbContext));
 
         var provider = services.BuildServiceProvider();

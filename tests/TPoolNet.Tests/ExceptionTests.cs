@@ -69,4 +69,65 @@ public class ExceptionTests
         ex.Message.Should().Be("Custom not found message");
         ex.InnerException.Should().BeSameAs(inner);
     }
+
+    [Fact]
+    public void TableTypeNotFoundException_DefaultMessage_SetsPropertiesAndMessage()
+    {
+        // Arrange & Act
+        var ex = new TableTypeNotFoundException("NonExistentType");
+
+        // Assert
+        ex.Should().BeAssignableTo<InvalidOperationException>();
+        ex.TableTypeName.Should().Be("NonExistentType");
+        ex.Message.Should().Contain("Table type 'NonExistentType' was not found.");
+    }
+
+    [Fact]
+    public void TableTypeNotFoundException_CustomMessageAndInnerException_Preserved()
+    {
+        // Arrange
+        var inner = new InvalidOperationException("Root cause");
+
+        // Act
+        var ex = new TableTypeNotFoundException("NonExistentType", "Custom type error", inner);
+
+        // Assert
+        ex.TableTypeName.Should().Be("NonExistentType");
+        ex.Message.Should().Be("Custom type error");
+        ex.InnerException.Should().BeSameAs(inner);
+    }
+
+    [Fact]
+    public void PoolCapacityExceededException_DefaultMessage_SetsPropertiesAndMessage()
+    {
+        // Arrange & Act
+        var ex = new PoolCapacityExceededException("OrderPool", requestedCount: 5, currentCount: 8, maxPoolSize: 10);
+
+        // Assert
+        ex.Should().BeAssignableTo<InvalidOperationException>();
+        ex.TableTypeName.Should().Be("OrderPool");
+        ex.RequestedCount.Should().Be(5);
+        ex.CurrentCount.Should().Be(8);
+        ex.MaxPoolSize.Should().Be(10);
+        ex.Message.Should().Contain("Cannot provision 5 table(s) for table type 'OrderPool'");
+        ex.Message.Should().Contain("Current count is 8 and MaxPoolSize is 10.");
+    }
+
+    [Fact]
+    public void PoolCapacityExceededException_CustomMessageAndInnerException_Preserved()
+    {
+        // Arrange
+        var inner = new InvalidOperationException("Root cause");
+
+        // Act
+        var ex = new PoolCapacityExceededException("OrderPool", 5, 8, 10, "Custom capacity message", inner);
+
+        // Assert
+        ex.TableTypeName.Should().Be("OrderPool");
+        ex.RequestedCount.Should().Be(5);
+        ex.CurrentCount.Should().Be(8);
+        ex.MaxPoolSize.Should().Be(10);
+        ex.Message.Should().Be("Custom capacity message");
+        ex.InnerException.Should().BeSameAs(inner);
+    }
 }

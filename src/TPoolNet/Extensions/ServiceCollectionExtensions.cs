@@ -42,6 +42,7 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<ITablePoolService, TablePoolService>();
+        services.AddScoped<ITableProvisionerService, TableProvisionerService>();
 
         return services;
     }
