@@ -10,21 +10,21 @@
 **Goal**: Scaffold solution structure, Central Package Management, entity configurations, and TPoolDbContext.
 
 **Tasks**:
-- [ ] Create `TPoolNet.sln` with `src/TPoolNet/TPoolNet.csproj` and `tests/TPoolNet.Tests/TPoolNet.Tests.csproj`.
-- [ ] Create `Directory.Build.props` and `Directory.Packages.props` with all packages listed in spec §2.1–2.2.
-- [ ] Implement domain entities in `TPoolNet.Entities` namespace:
+- [x] Create `TPoolNet.sln` with `src/TPoolNet/TPoolNet.csproj` and `tests/TPoolNet.Tests/TPoolNet.Tests.csproj`.
+- [x] Create `Directory.Build.props` and `Directory.Packages.props` with all packages listed in spec §2.1–2.2.
+- [x] Implement domain entities in `TPoolNet.Entities` namespace:
   - `TablesType` (PK: `int TableTypeId`)
   - `TablesConsumerType` (PK: `int ConsumerTypeId`, includes `Description`)
   - `TablesPool` (PK: `long TablePoolId`, includes `SchemaName`, `TableName`, `IsActive`, `CreatedAtUtc`)
   - `TablesUsage` (PK: `long TablePoolId`, 1:1 with TablesPool, includes `HeartbeatUtc`, `DeadlineUtc`)
   - `TablesUsageHistory` (PK: `long HistoryId`, `ReleaseReason` defaults to `"Explicit"`)
-- [ ] Configure entity mapping in `TPoolDbContext` with fluent API per spec §3.2:
+- [x] Configure entity mapping in `TPoolDbContext` with fluent API per spec §3.2:
   - Default schema `"tpool"`
   - All property constraints (max lengths, precision, required)
   - Unique indexes (`TypeName`, `SchemaName+TableName`)
   - Relationships (`TablesType` → `TablesPool` 1:*, `TablesPool` → `TablesUsage` 1:0..1)
   - Delete behaviors (`Restrict` on Type→Pool, `Cascade` on Pool→Usage)
-- [ ] Add initial EF Core migration for schema creation.
+- [x] Add initial EF Core migration for schema creation.
 
 **Acceptance Criteria**:
 * `dotnet build` succeeds with zero warnings/errors.
@@ -37,20 +37,20 @@
 **Goal**: Implement high-throughput, deadlock-free transient table leasing using `IAsyncDisposable`.
 
 **Tasks**:
-- [ ] Create `IPooledTableLease` interface in `TPoolNet.Abstractions` namespace exposing:
+- [x] Create `IPooledTableLease` interface in `TPoolNet.Abstractions` namespace exposing:
   - `long TablePoolId`, `string SchemaName`, `string TableName`, `string FullQualifiedName`
   - `string ConsumerId`, `DateTime BookedAtUtc`, `DateTime? DeadlineUtc`, `bool IsPersistent`
-- [ ] Create `ITablePoolService` interface with `BookAsync`, `BookPersistentAsync`, `ReleaseAsync`, `SendHeartbeatAsync`.
-- [ ] Implement `PooledTableLease` class in `TPoolNet.Services`:
+- [x] Create `ITablePoolService` interface with `BookAsync`, `BookPersistentAsync`, `ReleaseAsync`, `SendHeartbeatAsync`.
+- [x] Implement `PooledTableLease` class in `TPoolNet.Services`:
   - Constructor accepts `Func<PooledTableLease, string, Task>` release callback.
   - `IsPersistent => DeadlineUtc.HasValue`.
   - `DisposeAsync()` only triggers release for transient leases (reason: `"Disposed"`).
-- [ ] Implement `TablePoolService.BookAsync` using the atomic `UPDLOCK, READPAST` CTE query from spec §4.1.
-- [ ] Implement release logic in `TablePoolService`:
+- [x] Implement `TablePoolService.BookAsync` using the atomic `UPDLOCK, READPAST` CTE query from spec §4.1.
+- [x] Implement release logic in `TablePoolService`:
   1. Execute `TRUNCATE TABLE [{SchemaName}].[{TableName}]`.
   2. Insert record into `TablesUsageHistory` with release reason.
   3. Delete from `TablesUsage`.
-- [ ] Create `ServiceCollectionExtensions.AddTPoolNet(...)` for DI registration.
+- [x] Create `ServiceCollectionExtensions.AddTPoolNet(...)` for DI registration.
 
 **Acceptance Criteria**:
 * Booking returns an active lease and blocks other threads from obtaining the same table concurrently.

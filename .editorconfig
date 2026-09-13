@@ -39,3 +39,9 @@ indent_size = 2
 [src/TPoolNet/Migrations/**.cs]
 generated_code = true
 dotnet_analyzer_diagnostic.severity = none
+
+# Test projects — allow underscores in test names and non-disposed test instances
+[tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA2000.severity = none
+
