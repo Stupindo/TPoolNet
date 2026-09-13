@@ -154,4 +154,32 @@ public class PooledTableLeaseTests
         // Assert
         callCount.Should().Be(0);
     }
+
+    [Fact]
+    public async Task PersistentLease_MultipleDisposeAsync_NeverInvokesReleaseCallback()
+    {
+        // Arrange
+        var callCount = 0;
+        var lease = new PooledTableLease((_, _) =>
+        {
+            callCount++;
+            return Task.CompletedTask;
+        })
+        {
+            TablePoolId = 1,
+            SchemaName = "tpool",
+            TableName = "tbl_Test_001",
+            ConsumerId = "consumer-1",
+            BookedAtUtc = DateTime.UtcNow,
+            DeadlineUtc = DateTime.UtcNow.AddMinutes(30)
+        };
+
+        // Act
+        await lease.DisposeAsync();
+        await lease.DisposeAsync();
+        await lease.DisposeAsync();
+
+        // Assert
+        callCount.Should().Be(0);
+    }
 }

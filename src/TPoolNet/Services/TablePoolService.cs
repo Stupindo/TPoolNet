@@ -77,6 +77,9 @@ INNER JOIN [tpool].[TablesPool] p ON b.TablePoolId = p.TablePoolId;
         string consumerId,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tableTypeName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumerId);
+
         return BookCoreAsync(tableTypeName, consumerId, deadlineUtc: null, cancellationToken);
     }
 
@@ -87,9 +90,16 @@ INNER JOIN [tpool].[TablesPool] p ON b.TablePoolId = p.TablePoolId;
         TimeSpan retentionPeriod,
         CancellationToken cancellationToken = default)
     {
-        if (retentionPeriod <= TimeSpan.Zero)
+        ArgumentException.ThrowIfNullOrWhiteSpace(tableTypeName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumerId);
+
+        var maxRetention = TimeSpan.FromDays(365 * 10); // 10 years maximum retention
+        if (retentionPeriod <= TimeSpan.Zero || retentionPeriod > maxRetention)
         {
-            throw new ArgumentOutOfRangeException(nameof(retentionPeriod), retentionPeriod, "Retention period must be greater than zero.");
+            throw new ArgumentOutOfRangeException(
+                nameof(retentionPeriod),
+                retentionPeriod,
+                $"Retention period must be greater than zero and less than or equal to {maxRetention.TotalDays} days.");
         }
 
         var deadlineUtc = DateTime.UtcNow.Add(retentionPeriod);
@@ -108,6 +118,7 @@ INNER JOIN [tpool].[TablesPool] p ON b.TablePoolId = p.TablePoolId;
         var (schemaName, cleanTableName) = ParseTableIdentifier(tableName);
 
         var usageRecord = await _context.TablesUsages
+            .AsNoTracking()
             .Include(u => u.TablePool)
             .FirstOrDefaultAsync(
                 u => u.TablePool.SchemaName == schemaName && u.TablePool.TableName == cleanTableName,
@@ -116,22 +127,26 @@ INNER JOIN [tpool].[TablesPool] p ON b.TablePoolId = p.TablePoolId;
 
         if (usageRecord == null)
         {
-            throw new InvalidOperationException($"No active lease found for table '[{schemaName}].[{cleanTableName}]'.");
+            throw new TableLeaseNotFoundException(schemaName, cleanTableName);
         }
 
         if (!string.Equals(usageRecord.ConsumerId, consumerId, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
-                $"Consumer mismatch: table '[{schemaName}].[{cleanTableName}]' is booked by '{usageRecord.ConsumerId}', not '{consumerId}'.");
+            throw new ConsumerMismatchException(schemaName, cleanTableName, consumerId, usageRecord.ConsumerId);
         }
 
-        await ReleaseInternalAsync(
+        var released = await ReleaseInternalAsync(
             usageRecord.TablePoolId,
             schemaName,
             cleanTableName,
             consumerId,
             releaseReason: "Explicit",
             cancellationToken).ConfigureAwait(false);
+
+        if (!released)
+        {
+            throw new TableLeaseNotFoundException(schemaName, cleanTableName);
+        }
     }
 
     /// <inheritdoc />
@@ -244,7 +259,7 @@ WHERE TablePoolId = @TablePoolId;
         };
     }
 
-    private async Task ReleaseInternalAsync(
+    private async Task<bool> ReleaseInternalAsync(
         long tablePoolId,
         string schemaName,
         string tableName,
@@ -258,15 +273,28 @@ WHERE TablePoolId = @TablePoolId;
         var sql = string.Format(
             CultureInfo.InvariantCulture,
             @"
-TRUNCATE TABLE [{0}].[{1}];
+DECLARE @BookedAtUtc DATETIME2(2);
 
-INSERT INTO [tpool].[TablesUsageHistory] (TablePoolId, ConsumerId, BookedAtUtc, ReleasedAtUtc, ReleaseReason)
-SELECT u.TablePoolId, u.ConsumerId, u.BookedAtUtc, SYSUTCDATETIME(), @ReleaseReason
-FROM [tpool].[TablesUsage] u
-WHERE u.TablePoolId = @TablePoolId;
+SELECT @BookedAtUtc = BookedAtUtc
+FROM [tpool].[TablesUsage] WITH (UPDLOCK, HOLDLOCK)
+WHERE TablePoolId = @TablePoolId AND ConsumerId = @ConsumerId;
 
-DELETE FROM [tpool].[TablesUsage]
-WHERE TablePoolId = @TablePoolId;
+IF @BookedAtUtc IS NOT NULL
+BEGIN
+    TRUNCATE TABLE [{0}].[{1}];
+
+    INSERT INTO [tpool].[TablesUsageHistory] (TablePoolId, ConsumerId, BookedAtUtc, ReleasedAtUtc, ReleaseReason)
+    VALUES (@TablePoolId, @ConsumerId, @BookedAtUtc, SYSUTCDATETIME(), @ReleaseReason);
+
+    DELETE FROM [tpool].[TablesUsage]
+    WHERE TablePoolId = @TablePoolId;
+
+    SELECT CAST(1 AS BIT) AS Released;
+END
+ELSE
+BEGIN
+    SELECT CAST(0 AS BIT) AS Released;
+END
 ",
             schemaName,
             tableName);
@@ -292,22 +320,27 @@ WHERE TablePoolId = @TablePoolId;
             command.Transaction = existingTransaction?.GetDbTransaction() ?? localTransaction?.GetDbTransaction();
 
             var poolIdParam = new SqlParameter("@TablePoolId", SqlDbType.BigInt) { Value = tablePoolId };
+            var consumerParam = new SqlParameter("@ConsumerId", SqlDbType.VarChar, 100) { Value = consumerId };
             var reasonParam = new SqlParameter("@ReleaseReason", SqlDbType.VarChar, 50) { Value = releaseReason };
 
             command.Parameters.Add(poolIdParam);
+            command.Parameters.Add(consumerParam);
             command.Parameters.Add(reasonParam);
 
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            var scalar = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            var released = scalar is true or 1;
 
             if (localTransaction != null)
             {
                 await localTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            if (_logger != null)
+            if (released && _logger != null)
             {
                 LogTableReleased(_logger, schemaName, tableName, tablePoolId, consumerId, releaseReason);
             }
+
+            return released;
         }
         catch
         {

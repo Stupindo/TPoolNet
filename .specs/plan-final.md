@@ -63,10 +63,10 @@
 **Goal**: Enable tables to survive consumer process boundaries with deadline tracking.
 
 **Tasks**:
-- [ ] Implement `TablePoolService.BookPersistentAsync`:
+- [x] Implement `TablePoolService.BookPersistentAsync`:
   - Sets `DeadlineUtc = SYSUTCDATETIME() + retentionPeriod` in the CTE query's `@DeadlineUtc` parameter.
-- [ ] Verify `PooledTableLease.DisposeAsync()` acts as a no-op when `IsPersistent == true` (no truncation, no release).
-- [ ] Implement `TablePoolService.ReleaseAsync(tableName, consumerId)`:
+- [x] Verify `PooledTableLease.DisposeAsync()` acts as a no-op when `IsPersistent == true` (no truncation, no release).
+- [x] Implement `TablePoolService.ReleaseAsync(tableName, consumerId)`:
   - Validates matching `ConsumerId` before releasing.
   - Executes truncate → history insert → usage delete.
 

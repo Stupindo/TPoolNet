@@ -42,6 +42,8 @@ public interface ITablePoolService
     /// <param name="tableName">The physical table name (with or without schema prefix).</param>
     /// <param name="consumerId">The identifier of the consumer holding the lease.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <exception cref="TPoolNet.Exceptions.TableLeaseNotFoundException">Thrown when no active lease exists for the specified table.</exception>
+    /// <exception cref="TPoolNet.Exceptions.ConsumerMismatchException">Thrown when the consumer holding the lease does not match the provided consumer identifier.</exception>
     Task ReleaseAsync(
         string tableName,
         string consumerId,
