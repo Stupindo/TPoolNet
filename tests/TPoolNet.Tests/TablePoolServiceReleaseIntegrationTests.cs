@@ -267,4 +267,128 @@ public class TablePoolServiceReleaseIntegrationTests
             await context.Database.EnsureDeletedAsync();
         }
     }
+
+    [Fact]
+    public async Task BookPersistentAsync_FullLifecycle_RetainsDataAcrossDisposalAndRequiresMatchingConsumerForRelease()
+    {
+        if (!CanConnectToLocalDb()) return;
+
+        var options = new DbContextOptionsBuilder<TPoolDbContext>()
+            .UseSqlServer(ConnectionString)
+            .Options;
+
+        using (var context = new TPoolDbContext(options))
+        {
+            await context.Database.EnsureCreatedAsync();
+
+            // Create physical table [tpool].[tbl_Lifecycle_001]
+            await context.Database.ExecuteSqlRawAsync(
+                "IF OBJECT_ID('tpool.tbl_Lifecycle_001', 'U') IS NOT NULL DROP TABLE [tpool].[tbl_Lifecycle_001]; " +
+                "CREATE TABLE [tpool].[tbl_Lifecycle_001] (Id INT IDENTITY, Data NVARCHAR(100));");
+
+            // Seed TablesType and TablesPool
+            var type = new TablesType
+            {
+                TypeName = "LifecycleTestType",
+                TablePrefix = "Lifecycle",
+                DdlTemplate = "CREATE TABLE [{SCHEMA}].[{TABLENAME}] (Id INT);",
+                MaxPoolSize = 5
+            };
+            context.TablesTypes.Add(type);
+            await context.SaveChangesAsync();
+
+            var pool = new TablesPool
+            {
+                TableTypeId = type.TableTypeId,
+                SchemaName = "tpool",
+                TableName = "tbl_Lifecycle_001",
+                IsActive = true
+            };
+            context.TablesPools.Add(pool);
+            await context.SaveChangesAsync();
+        }
+
+        string fullQualifiedName;
+        long tablePoolId;
+
+        // Stage 1: Book persistent lease and insert physical data
+        using (var context = new TPoolDbContext(options))
+        {
+            var service = new TablePoolService(context);
+            var retentionPeriod = TimeSpan.FromHours(2);
+
+            var lease = await service.BookPersistentAsync("LifecycleTestType", "consumer-stage-1", retentionPeriod);
+
+            lease.Should().NotBeNull();
+            lease.IsPersistent.Should().BeTrue();
+            lease.DeadlineUtc.Should().NotBeNull();
+            lease.DeadlineUtc!.Value.Should().BeAfter(DateTime.UtcNow.AddMinutes(110));
+            lease.ConsumerId.Should().Be("consumer-stage-1");
+            lease.TableName.Should().Be("tbl_Lifecycle_001");
+            lease.SchemaName.Should().Be("tpool");
+
+            fullQualifiedName = lease.FullQualifiedName;
+            tablePoolId = lease.TablePoolId;
+
+            // Insert data while lease is held
+            await context.Database.ExecuteSqlRawAsync(
+                "INSERT INTO [tpool].[tbl_Lifecycle_001] (Data) VALUES ('Lifecycle Data 1'), ('Lifecycle Data 2');");
+
+            // Dispose the lease (simulating process termination)
+            await lease.DisposeAsync();
+        }
+
+        // Verify data and usage persist across lease disposal
+        using (var context = new TPoolDbContext(options))
+        {
+            var countAfterDisposal = await context.Database.SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS Value FROM [tpool].[tbl_Lifecycle_001]").FirstAsync();
+            countAfterDisposal.Should().Be(2, "persistent lease data must survive lease disposal");
+
+            var usage = await context.TablesUsages.FirstOrDefaultAsync(u => u.TablePoolId == tablePoolId);
+            usage.Should().NotBeNull("persistent lease usage record must survive lease disposal");
+            usage!.ConsumerId.Should().Be("consumer-stage-1");
+            usage.DeadlineUtc.Should().NotBeNull();
+
+            var history = await context.TablesUsageHistories.FirstOrDefaultAsync(h => h.TablePoolId == tablePoolId);
+            history.Should().BeNull("no release history should exist while persistent lease is active");
+        }
+
+        // Stage 2: Mismatched consumer cannot release
+        using (var context = new TPoolDbContext(options))
+        {
+            var service = new TablePoolService(context);
+
+            var act = () => service.ReleaseAsync(fullQualifiedName, "imposter-stage-2");
+            await act.Should().ThrowAsync<ConsumerMismatchException>();
+
+            var countAfterFailedRelease = await context.Database.SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS Value FROM [tpool].[tbl_Lifecycle_001]").FirstAsync();
+            countAfterFailedRelease.Should().Be(2, "failed release with mismatched consumer must not truncate data");
+        }
+
+        // Stage 3: Authorized consumer explicitly releases
+        using (var context = new TPoolDbContext(options))
+        {
+            var service = new TablePoolService(context);
+            await service.ReleaseAsync(fullQualifiedName, "consumer-stage-1");
+
+            // Verify table is truncated
+            var countAfterRelease = await context.Database.SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS Value FROM [tpool].[tbl_Lifecycle_001]").FirstAsync();
+            countAfterRelease.Should().Be(0, "explicit release must truncate physical table");
+
+            // Verify usage deleted
+            var activeUsage = await context.TablesUsages.FirstOrDefaultAsync(u => u.TablePoolId == tablePoolId);
+            activeUsage.Should().BeNull("explicit release must delete active usage record");
+
+            // Verify history recorded
+            var history = await context.TablesUsageHistories.FirstOrDefaultAsync(h => h.TablePoolId == tablePoolId);
+            history.Should().NotBeNull("explicit release must log history");
+            history!.ConsumerId.Should().Be("consumer-stage-1");
+            history.ReleaseReason.Should().Be("Explicit");
+
+            await context.Database.EnsureDeletedAsync();
+        }
+    }
 }
