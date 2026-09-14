@@ -120,4 +120,16 @@ public class TablePoolServiceValidationTests
         var act = () => service.ReleaseAsync(tableName, "consumer-1");
         await act.Should().ThrowAsync<ArgumentException>();
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-999)]
+    public async Task SendHeartbeatAsync_NonPositiveTablePoolId_ThrowsArgumentOutOfRangeException(long tablePoolId)
+    {
+        var service = CreateService();
+        var act = () => service.SendHeartbeatAsync(tablePoolId);
+        await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
+            .WithParameterName(nameof(tablePoolId));
+    }
 }

@@ -21,4 +21,10 @@ public class TPoolOptions
     /// Defaults to 60 seconds.
     /// </summary>
     public int SweeperIntervalSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Gets or sets whether the background zombie sweeper hosted service is enabled.
+    /// Defaults to true.
+    /// </summary>
+    public bool EnableSweeper { get; set; } = true;
 }

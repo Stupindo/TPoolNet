@@ -108,19 +108,19 @@
 **Goal**: Prevent resource leaks from crashed workers and expired persistent data holds.
 
 **Tasks**:
-- [ ] Implement `TablePoolService.SendHeartbeatAsync(long tablePoolId)`:
+- [x] Implement `TablePoolService.SendHeartbeatAsync(long tablePoolId)`:
   - Updates `HeartbeatUtc = SYSUTCDATETIME()` on the matching `TablesUsage` row.
-- [ ] Create `TPoolZombieSweeperHostedService : BackgroundService`:
+- [x] Create `TPoolZombieSweeperHostedService : BackgroundService`:
   - Runs on a configurable interval (`SweeperIntervalSeconds` from options).
   - Uses `ILogger<TPoolZombieSweeperHostedService>` for structured logging.
-- [ ] Implement sweep query from spec §4.4 identifying:
+- [x] Implement sweep query from spec §4.4 identifying:
   - Zombie transient leases: `DeadlineUtc IS NULL AND HeartbeatUtc < (now - HeartbeatTimeoutSeconds)`.
   - Expired persistent leases: `DeadlineUtc IS NOT NULL AND DeadlineUtc < now`.
-- [ ] For each identified record, safely execute:
+- [x] For each identified record, safely execute:
   1. `TRUNCATE TABLE [{SchemaName}].[{TableName}]`
   2. `INSERT INTO [tpool].[TablesUsageHistory]` with `ConsumerId`, `BookedAtUtc`, and reason (`SweptZombie` / `SweptExpired`).
   3. `DELETE FROM [tpool].[TablesUsage] WHERE TablePoolId = @TablePoolId`.
-- [ ] Ensure sweeper uses `UPDLOCK, READPAST` hints to avoid blocking the booking engine.
+- [x] Ensure sweeper uses `UPDLOCK, READPAST` hints to avoid blocking the booking engine.
 
 **Acceptance Criteria**:
 * Transient tables from ungracefully killed tasks are reclaimed after heartbeat timeout expiration.

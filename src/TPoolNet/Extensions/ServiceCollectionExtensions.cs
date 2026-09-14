@@ -43,6 +43,8 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<ITablePoolService, TablePoolService>();
         services.AddScoped<ITableProvisionerService, TableProvisionerService>();
+        services.AddSingleton<TPoolZombieSweeperHostedService>();
+        services.AddHostedService(sp => sp.GetRequiredService<TPoolZombieSweeperHostedService>());
 
         return services;
     }

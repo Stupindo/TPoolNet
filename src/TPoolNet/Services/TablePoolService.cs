@@ -154,6 +154,8 @@ INNER JOIN [tpool].[TablesPool] p ON b.TablePoolId = p.TablePoolId;
         long tablePoolId,
         CancellationToken cancellationToken = default)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tablePoolId);
+
         const string sql = @"
 UPDATE [tpool].[TablesUsage]
 SET HeartbeatUtc = SYSUTCDATETIME()
@@ -176,11 +178,18 @@ WHERE TablePoolId = @TablePoolId;
         param.Value = tablePoolId;
         command.Parameters.Add(param);
 
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
         if (_logger != null)
         {
-            LogHeartbeatSent(_logger, tablePoolId);
+            if (rowsAffected > 0)
+            {
+                LogHeartbeatSent(_logger, tablePoolId);
+            }
+            else
+            {
+                LogHeartbeatTargetNotFound(_logger, tablePoolId);
+            }
         }
     }
 
@@ -346,7 +355,14 @@ END
         {
             if (localTransaction != null)
             {
-                await localTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await localTransaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Suppress secondary rollback exception to preserve primary exception
+                }
             }
             throw;
         }
@@ -404,6 +420,9 @@ END
 
     [LoggerMessage(EventId = 4, Level = LogLevel.Information, Message = "Released table [{SchemaName}].[{TableName}] (PoolId: {TablePoolId}) for consumer '{ConsumerId}'. Reason: '{ReleaseReason}'.")]
     private static partial void LogTableReleased(ILogger logger, string schemaName, string tableName, long tablePoolId, string consumerId, string releaseReason);
+
+    [LoggerMessage(EventId = 5, Level = LogLevel.Warning, Message = "Heartbeat update affected 0 rows for TablePoolId {TablePoolId}. Lease may have expired or been released.")]
+    private static partial void LogHeartbeatTargetNotFound(ILogger logger, long tablePoolId);
 
     private sealed class BookedTableResult
     {

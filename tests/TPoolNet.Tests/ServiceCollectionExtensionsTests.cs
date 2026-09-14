@@ -2,11 +2,13 @@ namespace TPoolNet.Tests;
 
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using TPoolNet.Abstractions;
 using TPoolNet.Data;
 using TPoolNet.Extensions;
 using TPoolNet.Options;
+using TPoolNet.Services;
 
 public class ServiceCollectionExtensionsTests
 {
@@ -40,6 +42,8 @@ public class ServiceCollectionExtensionsTests
         serviceDescriptors.Should().Contain(d => d.ServiceType == typeof(ITablePoolService));
         serviceDescriptors.Should().Contain(d => d.ServiceType == typeof(ITableProvisionerService));
         serviceDescriptors.Should().Contain(d => d.ServiceType == typeof(TPoolDbContext));
+        serviceDescriptors.Should().Contain(d => d.ServiceType == typeof(TPoolZombieSweeperHostedService));
+        serviceDescriptors.Should().Contain(d => d.ServiceType == typeof(IHostedService));
 
         var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<TPoolOptions>>().Value;
